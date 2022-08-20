@@ -2,6 +2,7 @@ const express = require('express');
 const k8s = require('@kubernetes/client-node');
 
 const app = express();
+app.set('trust proxy', true);
 
 const kc = new k8s.KubeConfig();
 kc.loadFromDefault();
@@ -45,7 +46,7 @@ app.get('/secrets/:secretName/download/:key', async (req, res) => {
       throw new Error(`allowedSubjectNames definition for ${secretName} is invalid`);
 
     if(!secretDefinition.allowedSubjectNames.includes(clientName)) {
-      console.error(`${clientName} tried getting ${secretName}/${req.params.key}`);
+      console.error(`${clientName} tried getting ${secretName}/${req.params.key} from ${req.ip}`);
       return res.sendStatus(403);
     }
 
