@@ -12,11 +12,13 @@ app.get('/', (req, res) =>
   res.status(200).send('Hello World!'));
 
 app.get('/secrets/:secretName/download/:key', async (req, res) => {
-  try {
-    const clientName = req.headers[process.env.SSL_CLIENT_SUBJECT_HEADER ?? 'ssl-client-subject-dn'].replace('CN=', '');
-    if(!clientName)
-      return res.sendStatus(401);
+  const clientName = req.headers[process.env.SSL_CLIENT_SUBJECT_HEADER ?? 'ssl-client-subject-dn'] ?? ''.replace('CN=', '');
+  if(!clientName) {
+    console.error(`401: Client was rejected because of missing client certificate from ${req.ip}! THIS APPLICATION IS EXPOSED!`);
+    return res.sendStatus(401);
+  }
 
+  try {
     const namespaceName = kc.contexts.find(ctx => ctx.name === kc.currentContext).namespace;
 
     const configMapName = process.env['CONFIGMAP_NAME'] ?? 'kubernetes-secrets-exporter';
@@ -38,15 +40,17 @@ app.get('/secrets/:secretName/download/:key', async (req, res) => {
 
     const { secretName } = req.params;
     const secretDefinition = secrets[secretName];
-    if(typeof secretDefinition === 'undefined')
+    if(typeof secretDefinition === 'undefined') {
+      console.warn(`404: ${clientName} tried getting ${secretName}/${req.params.key} from ${req.ip}`);
       return res.status(404).send('Secret definition not found');
+    }
     if(typeof secretDefinition !== 'object' || Array.isArray(secretDefinition))
       throw new Error(`Secret definition for ${secretName} is invalid`);
     if(!Array.isArray(secretDefinition.allowedSubjectNames))
       throw new Error(`allowedSubjectNames definition for ${secretName} is invalid`);
 
     if(!secretDefinition.allowedSubjectNames.includes(clientName)) {
-      console.error(`${clientName} tried getting ${secretName}/${req.params.key} from ${req.ip}`);
+      console.error(`403: ${clientName} tried getting ${secretName}/${req.params.key} from ${req.ip}`);
       return res.sendStatus(403);
     }
 
@@ -55,12 +59,15 @@ app.get('/secrets/:secretName/download/:key', async (req, res) => {
       throw new Error(`Couldn't get secret/${secretName}`)
 
     const value = secret.body.data[req.params.key];
-    if(!value)
+    if(!value) {
+      console.warn(`404: Key ${req.params.key} was not found in secret/${secretName}`)
       return res.status(404).send(`Key ${req.params.key} was not found in secret/${secretName}`);
+    }
 
+    console.log(`200: ${clientName} downloaded ${secretName}/${req.params.key} from ${req.ip}`);
     res.send(Buffer.from(value, 'base64').toString('utf8'));
   } catch(err) {
-    console.error(err);
+    console.error(`500: ${clientName} tried ${req.url} from ${req.ip}`, err);
     res.sendStatus(500);
   }
 });
