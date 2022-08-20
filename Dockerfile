@@ -7,4 +7,6 @@ WORKDIR /srv
 
 RUN npm ci
 
+USER 1000:1000
+
 CMD [ "/usr/local/bin/node", "/srv/src/index.js"]
