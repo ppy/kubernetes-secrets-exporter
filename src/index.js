@@ -44,8 +44,10 @@ app.get('/secrets/:secretName/download/:key', async (req, res) => {
     if(!Array.isArray(secretDefinition.allowedSubjectNames))
       throw new Error(`allowedSubjectNames definition for ${secretName} is invalid`);
 
-    if(!secretDefinition.allowedSubjectNames.includes(clientName))
+    if(!secretDefinition.allowedSubjectNames.includes(clientName)) {
+      console.error(`${clientName} tried getting ${secretName}/${req.params.key}`);
       return res.sendStatus(403);
+    }
 
     const secret = await k8sApi.readNamespacedSecret(secretName, namespaceName);
     if(!secret)
