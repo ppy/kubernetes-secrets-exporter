@@ -12,7 +12,7 @@ app.get('/', (req, res) =>
   res.status(200).send('Hello World!'));
 
 app.get('/secrets/:secretName/download/:key', async (req, res) => {
-  const clientName = req.headers[process.env.SSL_CLIENT_SUBJECT_HEADER ?? 'ssl-client-subject-dn'] ?? ''.replace('CN=', '');
+  const clientName = (req.headers[process.env.SSL_CLIENT_SUBJECT_HEADER ?? 'ssl-client-subject-dn'] ?? '').replace('CN=', '');
   if(!clientName) {
     console.error(`401: Client was rejected because of missing client certificate from ${req.ip}! THIS APPLICATION IS EXPOSED!`);
     return res.sendStatus(401);
