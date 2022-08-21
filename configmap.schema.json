@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ppy.sh/kubernetes-secrets-exporter.schema.json",
+  "title": "kubernetes-secrets-exporter ConfigMap",
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "description": "Secret name as seen in Kubernetes",
+    "additionalProperties": false,
+    "properties": {
+      "allowedSubjectNames": {
+        "type": "array",
+        "description": "List of all allowed Common Names to access this secret",
+        "required": true,
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
