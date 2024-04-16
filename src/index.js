@@ -93,13 +93,35 @@ if (LISTEN_MODE === 'http') {
   const https = require('https');
   const fs = require('fs');
 
+  const caPath = process.env['CA_CERT_PATH'] ?? '/ca-certs/ca.crt';
+  const certPath = process.env['TLS_CERT_PATH'] ?? '/tls-certs/tls.crt';
+  const keyPath = process.env['TLS_KEY_PATH'] ?? '/tls-certs/tls.key';
+
+  function getSecurityContext() {
+    const ca = fs.readFileSync(caPath);
+    const cert = fs.readFileSync(certPath);
+    const key = fs.readFileSync(keyPath);
+
+    return { cert, key, ca };
+  }
+
   server = https.createServer({
-      ca: fs.readFileSync(process.env['CA_CERT_PATH'] ?? '/ca-certs/ca.crt'),
-      cert: fs.readFileSync(process.env['TLS_CERT_PATH'] ?? '/tls-certs/tls.crt'),
-      key: fs.readFileSync(process.env['TLS_KEY_PATH'] ?? '/tls-certs/tls.key'),
+      ...getSecurityContext(),
       requestCert: true,
       rejectUnauthorized: true,
   }, app);
+
+  for (const path of [caPath, certPath, keyPath]) {
+    fs.watch(path, (event) => {
+      try {
+        console.log(`Detected ${event} on ${path}`);
+        server.setSecureContext(getSecurityContext());
+        console.log('Successfully reloaded certificates');
+      } catch (err) {
+        console.error('Error while reloading certificates', err);
+      }
+    });
+  }
 }
 
 const port = process.env.PORT || 5000;
