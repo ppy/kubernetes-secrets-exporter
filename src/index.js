@@ -2,15 +2,13 @@ const express = require('express');
 const k8s = require('@kubernetes/client-node');
 
 const LISTEN_MODE = process.env['LISTEN_MODE'];
-if(LISTEN_MODE !== 'http' && LISTEN_MODE !== 'https') {
+if(LISTEN_MODE !== 'http' && LISTEN_MODE !== 'https')
   throw new Error('LISTEN_MODE is invalid or undefined. Valid values: http, https');
-}
 
 let trustProxy = false;
-if(process.env["TRUST_PROXY"] !== undefined) {
-  // only enable if the environment variable is set to true or 1 (case-insensitive)
+// only enable if the environment variable is set to true or 1 (case-insensitive)
+if(process.env["TRUST_PROXY"] !== undefined)
   trustProxy = !['false', '0'].includes(process.env['TRUST_PROXY'].toLowerCase());
-}
 
 const app = express();
 app.set('trust proxy', trustProxy);
@@ -36,7 +34,7 @@ app.get('/secrets/:secretName/download/:key', async (req, res) => {
     const configMapName = process.env['CONFIGMAP_NAME'] ?? 'kubernetes-secrets-exporter';
     const configMap = await k8sApi.readNamespacedConfigMap(configMapName, namespaceName);
     if(!configMap)
-      throw new Error(`Couldn't get configmap/${configMapName}`)
+      throw new Error(`Couldn't get configmap/${configMapName}`);
 
     let secrets = configMap.body.data['secrets.json'];
     if(!secrets)
@@ -68,11 +66,11 @@ app.get('/secrets/:secretName/download/:key', async (req, res) => {
 
     const secret = await k8sApi.readNamespacedSecret(secretName, namespaceName);
     if(!secret)
-      throw new Error(`Couldn't get secret/${secretName}`)
+      throw new Error(`Couldn't get secret/${secretName}`);
 
     const value = secret.body.data[req.params.key];
     if(!value) {
-      console.warn(`404: Key ${req.params.key} was not found in secret/${secretName}`)
+      console.warn(`404: Key ${req.params.key} was not found in secret/${secretName}`);
       return res.status(404).send(`Key ${req.params.key} was not found in secret/${secretName}`);
     }
 
@@ -85,7 +83,7 @@ app.get('/secrets/:secretName/download/:key', async (req, res) => {
 });
 
 let server;
-if (LISTEN_MODE === 'http') {
+if(LISTEN_MODE === 'http') {
   const http = require('http');
 
   server = http.createServer(app);
@@ -111,13 +109,13 @@ if (LISTEN_MODE === 'http') {
       rejectUnauthorized: true,
   }, app);
 
-  for (const path of [caPath, certPath, keyPath]) {
+  for(const path of [caPath, certPath, keyPath]) {
     fs.watch(path, (event) => {
       try {
         console.log(`Detected ${event} on ${path}`);
         server.setSecureContext(getSecurityContext());
         console.log('Successfully reloaded certificates');
-      } catch (err) {
+      } catch(err) {
         console.error('Error while reloading certificates', err);
       }
     });
