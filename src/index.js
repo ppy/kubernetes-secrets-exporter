@@ -1,24 +1,36 @@
 const express = require('express');
 const k8s = require('@kubernetes/client-node');
 
+const LISTEN_MODE = process.env['LISTEN_MODE'];
+if(LISTEN_MODE !== 'http' && LISTEN_MODE !== 'https') {
+  throw new Error('LISTEN_MODE is invalid or undefined. Valid values: http, https');
+}
+
+let trustProxy = false;
+if(process.env["TRUST_PROXY"] !== undefined) {
+  // only enable if the environment variable is set to true or 1 (case-insensitive)
+  trustProxy = !['false', '0'].includes(process.env['TRUST_PROXY'].toLowerCase());
+}
+
 const app = express();
-app.set('trust proxy', true);
+app.set('trust proxy', trustProxy);
 
 const kc = new k8s.KubeConfig();
 kc.loadFromDefault();
 const k8sApi = kc.makeApiClient(k8s.CoreV1Api);
 
-app.get('/', (req, res) => 
+app.get('/', (req, res) =>
   res.status(200).send('Hello World!'));
 
 app.get('/secrets/:secretName/download/:key', async (req, res) => {
-  const clientName = (req.headers[process.env.SSL_CLIENT_SUBJECT_HEADER ?? 'ssl-client-subject-dn'] ?? '').replace('CN=', '');
-  if(!clientName) {
-    console.error(`401: Client was rejected because of missing client certificate from ${req.ip}! THIS APPLICATION IS EXPOSED!`);
-    return res.sendStatus(401);
-  }
-
+  let clientName;
   try {
+    if(LISTEN_MODE === 'http') {
+      clientName = req.headers[process.env.SSL_CLIENT_SUBJECT_HEADER ?? 'ssl-client-subject-dn'].replace('CN=', '');
+    } else {
+      clientName = req.socket.getPeerCertificate().subject.CN;
+    }
+
     const namespaceName = kc.contexts.find(ctx => ctx.name === kc.currentContext).namespace;
 
     const configMapName = process.env['CONFIGMAP_NAME'] ?? 'kubernetes-secrets-exporter';
@@ -67,10 +79,29 @@ app.get('/secrets/:secretName/download/:key', async (req, res) => {
     console.log(`200: ${clientName} downloaded ${secretName}/${req.params.key} from ${req.ip}`);
     res.send(Buffer.from(value, 'base64').toString('utf8'));
   } catch(err) {
-    console.error(`500: ${clientName} tried ${req.url} from ${req.ip}`, err);
+    console.error(`500: ${req.ip} (CN: ${clientName}) tried ${req.url}`, err);
     res.sendStatus(500);
   }
 });
 
-app.listen(5000, () => 
-  console.log('kubernetes-secrets-exporter is running on port 5000'));
+let server;
+if (LISTEN_MODE === 'http') {
+  const http = require('http');
+
+  server = http.createServer(app);
+} else {
+  const https = require('https');
+  const fs = require('fs');
+
+  server = https.createServer({
+      ca: fs.readFileSync(process.env['CA_CERT_PATH'] ?? '/ca-certs/ca.crt'),
+      cert: fs.readFileSync(process.env['TLS_CERT_PATH'] ?? '/tls-certs/tls.crt'),
+      key: fs.readFileSync(process.env['TLS_KEY_PATH'] ?? '/tls-certs/tls.key'),
+      requestCert: true,
+      rejectUnauthorized: true,
+  }, app);
+}
+
+const port = process.env.PORT || 5000;
+server.listen(port, () =>
+  console.log(`kubernetes-secrets-exporter is running on port ${port}`));
