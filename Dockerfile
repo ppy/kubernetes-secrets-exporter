@@ -1,4 +1,4 @@
-FROM node:16-alpine
+FROM node:20-alpine3.19
 
 COPY ./src/ /srv/src/
 COPY package.json package-lock.json /srv/
